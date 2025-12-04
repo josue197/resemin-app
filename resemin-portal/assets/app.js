@@ -1,7 +1,7 @@
 
 // ==== CONFIGURACIÓN ====
 // En producción: const API = "https://tu-backend.railway.app";
-const API = "http://127.0.0.1:8000";
+const API = "https://resemin-app.onrender.com";
 
 // Estado admin
 let ADMIN = JSON.parse(sessionStorage.getItem("ADMIN_CRED") || "null");
