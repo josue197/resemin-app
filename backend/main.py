@@ -1,5 +1,6 @@
 
-from fastapi import FastAPI, UploadFile, File, Header, HTTPException, Body, Query, Request
+# backend/main.py
+from fastapi import FastAPI, UploadFile, File, Header, HTTPException, Body, Query, Request, Form
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
@@ -14,20 +15,17 @@ import logging
 # ====== Cargar .env ======
 ENV_PATH = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
-
 ADMIN_USER = os.getenv("ADMIN_USER") or "admin"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD") or "Admin2025"
 DB = os.getenv("DB_PATH") or "data.db"
 
-app = FastAPI(title="Resemin App Backend", version="1.5.0")
+app = FastAPI(title="Resemin App Backend", version="1.6.0")
 
 # ====== CORS ======
 ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
-    "https://resemin-portal.netlify.app",
-    # Agrega tu dominio de Netlify al desplegar, por ejemplo:
-    
+    "https://resemin-portal.netlify.app",  # <--- tu dominio de Netlify
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -57,24 +55,24 @@ def init_db():
     con = sqlite3.connect(DB)
     cur = con.cursor()
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS employees(
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            data TEXT
-        )
+    CREATE TABLE IF NOT EXISTS employees(
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        data TEXT
+    )
     """)
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS meta(
-            key TEXT PRIMARY KEY,
-            value TEXT
-        )
+    CREATE TABLE IF NOT EXISTS meta(
+        key TEXT PRIMARY KEY,
+        value TEXT
+    )
     """)
     cur.execute("""
-        CREATE TABLE IF NOT EXISTS config(
-            id INTEGER,
-            dni TEXT,
-            fecha TEXT,
-            visibles TEXT
-        )
+    CREATE TABLE IF NOT EXISTS config(
+        id INTEGER,
+        dni TEXT,
+        fecha TEXT,
+        visibles TEXT
+    )
     """)
     con.commit(); con.close()
     ensure_config_schema()
@@ -185,6 +183,13 @@ def validate_columns_exist(dni_col: str, fecha_col: str, visibles: List[str], av
             }
         )
 
+# ====== Importa mapeo flexible ======
+from .excel_mapping import (
+    dataframe_with_canonical_headers,
+    # también puedes importar estas si las quieres usar en /config
+    VISIBLE_DEFAULT,
+)
+
 # ====== Básicas ======
 @app.get("/health")
 def health():
@@ -194,7 +199,14 @@ def health():
 def root():
     return {"message": "Resemin Backend activo", "docs": "/docs"}
 
-# ====== Login Admin (opcional para verificar credenciales) ======
+@app.get("/config")
+def config_endpoint():
+    return {
+        "allowed_origins": ALLOWED_ORIGINS,
+        "version": "1.6.0",
+    }
+
+# ====== Login Admin ======
 @app.post("/admin/login")
 def admin_login(
     x_admin_user: Optional[str] = Header(None, alias="X-Admin-User"),
@@ -203,16 +215,22 @@ def admin_login(
     check_admin(x_admin_user, x_admin_password)
     return {"ok": True, "message": "Login correcto"}
 
-# ====== ADMIN: Upload ======
+# ====== ADMIN: Upload (con mapeo flexible) ======
 @app.post("/admin/upload")
 async def admin_upload(
     file: UploadFile = File(...),
     x_admin_user: Optional[str] = Header(None, alias="X-Admin-User"),
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
+    # overrides opcionales desde Admin (si quieres usarlos ahora o más adelante)
+    dni_col_original: Optional[str] = Form(None),
+    fecha_col_original: Optional[str] = Form(None),
 ):
     check_admin(x_admin_user, x_admin_password)
+
     contents = await file.read()
     bio = BytesIO(contents)
+
+    # Lee .xlsx preferentemente, cae a autodetección si falla
     try:
         df = pd.read_excel(bio, engine="openpyxl")
     except Exception:
@@ -222,8 +240,22 @@ async def admin_upload(
         except Exception as e2:
             raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel. Usa .xlsx. Detalle: {e2}")
 
-    rows = [normalize_row(r) for _, r in df.iterrows()]
-    columns = list(map(str, df.columns))
+    # Admin puede forzar equivalencias, si decides enviar estos valores desde el front
+    admin_map = {}
+    if dni_col_original:
+        admin_map[dni_col_original] = "TRABAJADOR"
+    if fecha_col_original:
+        admin_map[fecha_col_original] = "FECHA_INGRESO"
+
+    # >>> Mapeo flexible y renombre a canónicos
+    try:
+        df_canon, header_map = dataframe_with_canonical_headers(df, admin_map)
+    except ValueError as ve:
+        raise HTTPException(status_code=400, detail=str(ve))
+
+    # Persistir filas (con cabeceras canónicas)
+    rows = [normalize_row(r) for _, r in df_canon.iterrows()]
+    columns = list(map(str, df_canon.columns))
 
     con = sqlite3.connect(DB); cur = con.cursor()
     cur.execute("DELETE FROM employees")
@@ -231,15 +263,16 @@ async def admin_upload(
         cur.execute("INSERT INTO employees(data) VALUES(?)", (json.dumps(r, ensure_ascii=False),))
     con.commit(); con.close()
 
+    # Guardar columnas canónicas en meta
     set_meta("columns", json.dumps(columns, ensure_ascii=False))
 
-    return {"columns": columns, "rows": len(rows)}
+    return {"columns": columns, "rows": len(rows), "mapeo_aplicado": header_map}
 
-# ====== ADMIN: Config (solo JSON) ======
+# ====== ADMIN: Config (JSON) ======
 class ConfigPayload(BaseModel):
-    dni_column: str = Field(..., description="Nombre de la columna DNI")
-    fecha_column: str = Field(..., description="Nombre de la columna Fecha")
-    visible_columns: List[str] = Field(..., description="Columnas visibles en consultas públicas")
+    dni_column: str = Field(..., description="Nombre de la columna DNI (canónica)")
+    fecha_column: str = Field(..., description="Nombre de la columna Fecha (canónica)")
+    visible_columns: List[str] = Field(..., description="Columnas visibles en consultas públicas (canónicas)")
 
 @app.post("/admin/config")
 def admin_config(
@@ -248,14 +281,13 @@ def admin_config(
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
 ):
     check_admin(x_admin_user, x_admin_password)
-
     dni_column = payload.dni_column.strip()
     fecha_column = payload.fecha_column.strip()
     visible_columns = payload.visible_columns or []
-
     if not dni_column or not fecha_column or not visible_columns:
         raise HTTPException(status_code=400, detail="Completa DNI, Fecha y columnas visibles")
 
+    # Ahora available son canónicas (las que guardamos en meta)
     available = get_last_columns()
     if not available:
         raise HTTPException(status_code=409, detail="No hay columnas cargadas aún. Primero suba el Excel en /admin/upload.")
@@ -292,6 +324,7 @@ def consulta(item: dict):
     if not cfg:
         raise HTTPException(status_code=400, detail="No configurado")
     dni_col = cfg["dni"]; fecha_col = cfg["fecha"]; visibles = cfg["visibles"]
+
     con = sqlite3.connect(DB); cur = con.cursor()
     cur.execute("SELECT data FROM employees")
     res = []
@@ -315,7 +348,6 @@ def public_query(dni: str = Query(...), fecha: str = Query(...)):
         cfg = get_config()
         if not cfg:
             return {"found": False, "message": "No hay configuración guardada"}
-
         dni_col = cfg["dni"]; fecha_col = cfg["fecha"]; visibles = cfg["visibles"]
         available = get_last_columns()
         validate_columns_exist(dni_col, fecha_col, visibles, available)
