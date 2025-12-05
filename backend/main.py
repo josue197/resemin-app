@@ -5,7 +5,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
-import sqlite3, json, os
+import sqlite3, json, os, math
 from io import BytesIO
 from datetime import date, datetime
 from typing import Optional, List
@@ -19,13 +19,13 @@ ADMIN_USER = os.getenv("ADMIN_USER") or "admin"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD") or "Admin2025"
 DB = os.getenv("DB_PATH") or "data.db"
 
-app = FastAPI(title="Resemin App Backend", version="1.6.0")
+app = FastAPI(title="Resemin App Backend", version="1.7.0")
 
 # ====== CORS ======
 ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
-    "https://resemin-portal.netlify.app",  # <--- tu dominio de Netlify
+    "https://resemin-portal.netlify.app",  # <--- dominio exacto de Netlify
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -97,27 +97,69 @@ def ensure_config_schema():
 
 init_db()
 
-# ====== Utilidades ======
+# ====== Helpers para JSON y fechas ======
+def is_null_like(v) -> bool:
+    """True para None, NaN, NaT, pd.NA."""
+    try:
+        return pd.isna(v)   # cubre NaN, NaT, None y pd.NA
+    except Exception:
+        return v is None or (isinstance(v, float) and math.isnan(v))
+
+def parse_input_date(s: str) -> str:
+    """
+    Acepta 'DD/MM/YYYY' o 'YYYY-MM-DD' y devuelve ISO 'YYYY-MM-DD'.
+    Si no puede parsear, devuelve el string original.
+    """
+    if not s:
+        return s
+    try:
+        return pd.to_datetime(s, format="%d/%m/%Y").strftime("%Y-%m-%d")
+    except Exception:
+        pass
+    try:
+        return pd.to_datetime(s).strftime("%Y-%m-%d")
+    except Exception:
+        return s
+
+def to_json_scalar(v):
+    """
+    Convierte cualquier valor a un escalar JSON seguro:
+    - NaN/NaT/pd.NA -> None
+    - Timestamps/fechas -> ISO 'YYYY-MM-DD'
+    - Otros tipos -> tal cual o str si es no serializable
+    """
+    if is_null_like(v):
+        return None
+    if isinstance(v, (pd.Timestamp, datetime, date)):
+        try:
+            return pd.to_datetime(v).strftime("%Y-%m-%d")
+        except Exception:
+            return None
+    try:
+        if hasattr(v, "item"):
+            return v.item()  # numpy/pandas escalar -> python escalar
+    except Exception:
+        pass
+    if isinstance(v, (dict, list, tuple, set)):
+        try:
+            return json.loads(json.dumps(v, default=str))
+        except Exception:
+            return str(v)
+    return v
+
+def normalize_row(row_dict: dict) -> dict:
+    """Normaliza cada valor a algo JSON-compliant (sin NaN)."""
+    out = {}
+    for k, v in row_dict.items():
+        out[str(k)] = to_json_scalar(v)
+    return out
+
+# ====== Utilidades previas ======
 def check_admin(user: Optional[str], pwd: Optional[str]):
     if not ADMIN_PASSWORD or not ADMIN_USER:
         raise HTTPException(status_code=500, detail="ADMIN_USER/PASSWORD no configurados")
     if user != ADMIN_USER or pwd != ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="Unauthorized")
-
-def to_iso_date(val):
-    try:
-        if isinstance(val, (pd.Timestamp, datetime, date)):
-            return pd.to_datetime(val).strftime("%Y-%m-%d")
-    except Exception:
-        pass
-    return val
-
-def normalize_row(row_dict: dict) -> dict:
-    out = {}
-    for k, v in row_dict.items():
-        nv = to_iso_date(v)
-        out[str(k)] = nv if (nv is None or isinstance(nv, (str, int, float))) else str(nv)
-    return out
 
 def set_meta(key: str, value: str):
     con = sqlite3.connect(DB)
@@ -183,13 +225,6 @@ def validate_columns_exist(dni_col: str, fecha_col: str, visibles: List[str], av
             }
         )
 
-# ====== Importa mapeo flexible ======
-from .excel_mapping import (
-    dataframe_with_canonical_headers,
-    # también puedes importar estas si las quieres usar en /config
-    VISIBLE_DEFAULT,
-)
-
 # ====== Básicas ======
 @app.get("/health")
 def health():
@@ -203,7 +238,7 @@ def root():
 def config_endpoint():
     return {
         "allowed_origins": ALLOWED_ORIGINS,
-        "version": "1.6.0",
+        "version": "1.7.0",
     }
 
 # ====== Login Admin ======
@@ -215,15 +250,12 @@ def admin_login(
     check_admin(x_admin_user, x_admin_password)
     return {"ok": True, "message": "Login correcto"}
 
-# ====== ADMIN: Upload (con mapeo flexible) ======
+# ====== ADMIN: Upload ======
 @app.post("/admin/upload")
 async def admin_upload(
     file: UploadFile = File(...),
     x_admin_user: Optional[str] = Header(None, alias="X-Admin-User"),
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
-    # overrides opcionales desde Admin (si quieres usarlos ahora o más adelante)
-    dni_col_original: Optional[str] = Form(None),
-    fecha_col_original: Optional[str] = Form(None),
 ):
     check_admin(x_admin_user, x_admin_password)
 
@@ -240,22 +272,9 @@ async def admin_upload(
         except Exception as e2:
             raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel. Usa .xlsx. Detalle: {e2}")
 
-    # Admin puede forzar equivalencias, si decides enviar estos valores desde el front
-    admin_map = {}
-    if dni_col_original:
-        admin_map[dni_col_original] = "TRABAJADOR"
-    if fecha_col_original:
-        admin_map[fecha_col_original] = "FECHA_INGRESO"
-
-    # >>> Mapeo flexible y renombre a canónicos
-    try:
-        df_canon, header_map = dataframe_with_canonical_headers(df, admin_map)
-    except ValueError as ve:
-        raise HTTPException(status_code=400, detail=str(ve))
-
-    # Persistir filas (con cabeceras canónicas)
-    rows = [normalize_row(r) for _, r in df_canon.iterrows()]
-    columns = list(map(str, df_canon.columns))
+    # Normaliza filas y guarda
+    rows = [normalize_row(r) for _, r in df.iterrows()]
+    columns = list(map(str, df.columns))
 
     con = sqlite3.connect(DB); cur = con.cursor()
     cur.execute("DELETE FROM employees")
@@ -263,16 +282,14 @@ async def admin_upload(
         cur.execute("INSERT INTO employees(data) VALUES(?)", (json.dumps(r, ensure_ascii=False),))
     con.commit(); con.close()
 
-    # Guardar columnas canónicas en meta
     set_meta("columns", json.dumps(columns, ensure_ascii=False))
-
-    return {"columns": columns, "rows": len(rows), "mapeo_aplicado": header_map}
+    return {"columns": columns, "rows": len(rows)}
 
 # ====== ADMIN: Config (JSON) ======
 class ConfigPayload(BaseModel):
-    dni_column: str = Field(..., description="Nombre de la columna DNI (canónica)")
-    fecha_column: str = Field(..., description="Nombre de la columna Fecha (canónica)")
-    visible_columns: List[str] = Field(..., description="Columnas visibles en consultas públicas (canónicas)")
+    dni_column: str = Field(..., description="Nombre de la columna DNI")
+    fecha_column: str = Field(..., description="Nombre de la columna Fecha")
+    visible_columns: List[str] = Field(..., description="Columnas visibles en consultas públicas")
 
 @app.post("/admin/config")
 def admin_config(
@@ -287,7 +304,6 @@ def admin_config(
     if not dni_column or not fecha_column or not visible_columns:
         raise HTTPException(status_code=400, detail="Completa DNI, Fecha y columnas visibles")
 
-    # Ahora available son canónicas (las que guardamos en meta)
     available = get_last_columns()
     if not available:
         raise HTTPException(status_code=409, detail="No hay columnas cargadas aún. Primero suba el Excel en /admin/upload.")
@@ -301,7 +317,6 @@ def admin_config(
         (dni_column, fecha_column, json.dumps(visible_columns, ensure_ascii=False))
     )
     con.commit(); con.close()
-
     return {"ok": True, "dni_column": dni_column, "fecha_column": fecha_column, "visible_columns": visible_columns}
 
 @app.get("/admin/status")
@@ -325,13 +340,21 @@ def consulta(item: dict):
         raise HTTPException(status_code=400, detail="No configurado")
     dni_col = cfg["dni"]; fecha_col = cfg["fecha"]; visibles = cfg["visibles"]
 
+    # Normaliza la fecha del payload (acepta DD/MM/YYYY o ISO)
+    req_dni = str(item.get("dni", ""))
+    req_fecha = parse_input_date(str(item.get("fecha", "")))
+
     con = sqlite3.connect(DB); cur = con.cursor()
     cur.execute("SELECT data FROM employees")
     res = []
     for (row,) in cur.fetchall():
         data = json.loads(row)
-        if str(data.get(dni_col, "")) == str(item.get("dni", "")) and str(data.get(fecha_col, "")) == str(item.get("fecha", "")):
-            res.append({k: data.get(k) for k in visibles})
+        db_dni = str(data.get(dni_col, ""))
+        db_fecha = parse_input_date(str(data.get(fecha_col, "")))  # ISO esperado
+
+        if db_dni == req_dni and db_fecha == req_fecha:
+            # Sanea valores visibles (sin NaN)
+            res.append({k: to_json_scalar(data.get(k)) for k in visibles})
     con.close()
     return {"results": res}
 
@@ -349,16 +372,24 @@ def public_query(dni: str = Query(...), fecha: str = Query(...)):
         if not cfg:
             return {"found": False, "message": "No hay configuración guardada"}
         dni_col = cfg["dni"]; fecha_col = cfg["fecha"]; visibles = cfg["visibles"]
+
         available = get_last_columns()
         validate_columns_exist(dni_col, fecha_col, visibles, available)
+
+        # Normaliza fecha del query param
+        req_dni = str(dni)
+        req_fecha = parse_input_date(str(fecha))
 
         con = sqlite3.connect(DB); cur = con.cursor()
         cur.execute("SELECT data FROM employees")
         for (row,) in cur.fetchall():
             data = json.loads(row)
-            if str(data.get(dni_col, "")) == str(dni) and str(data.get(fecha_col, "")) == str(fecha):
+            db_dni = str(data.get(dni_col, ""))
+            db_fecha = parse_input_date(str(data.get(fecha_col, "")))  # ISO esperado
+
+            if db_dni == req_dni and db_fecha == req_fecha:
                 con.close()
-                return {"found": True, "data": {k: data.get(k) for k in visibles}}
+                return {"found": True, "data": {k: to_json_scalar(data.get(k)) for k in visibles}}
         con.close()
         return {"found": False, "message": "No se encontró registro para ese DNI y fecha"}
     except HTTPException as he:
