@@ -25,8 +25,9 @@ app = FastAPI(title="Resemin App Backend", version="1.5.0")
 ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
-    # Agrega tu dominio de Netlify al desplegar, por ejemplo:
     "https://resemin-portal.netlify.app",
+    # Agrega tu dominio de Netlify al desplegar, por ejemplo:
+    
 ]
 app.add_middleware(
     CORSMiddleware,
