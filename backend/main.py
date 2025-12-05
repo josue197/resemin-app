@@ -26,7 +26,7 @@ ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
     # Agrega tu dominio de Netlify al desplegar, por ejemplo:
-    # "https://resemin-portal.netlify.app",
+    "https://resemin-portal.netlify.app",
 ]
 app.add_middleware(
     CORSMiddleware,
