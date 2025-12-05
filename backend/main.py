@@ -5,27 +5,66 @@ from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
 import pandas as pd
-import sqlite3, json, os, math
+import json, os, math
 from io import BytesIO
 from datetime import date, datetime
 from typing import Optional, List
 from pydantic import BaseModel, Field
 import logging
 
-# ====== Cargar .env ======
+# ==== SQLAlchemy (PostgreSQL / Supabase) ====
+from sqlalchemy import create_engine, Column, Integer, String, Date, Text, MetaData
+from sqlalchemy.orm import sessionmaker, declarative_base, Session
+from sqlalchemy.dialects.postgresql import JSONB
+
+# ====== Cargar .env (solo útil en local) ======
 ENV_PATH = Path(__file__).parent / ".env"
 load_dotenv(dotenv_path=ENV_PATH)
+
 ADMIN_USER = os.getenv("ADMIN_USER") or "admin"
 ADMIN_PASSWORD = os.getenv("ADMIN_PASSWORD") or "Admin2025"
-DB = os.getenv("DB_PATH") or "data.db"
+DATABASE_URL = os.getenv("DATABASE_URL")  # <-- usa Supabase; ya NO usamos DB_PATH
 
-app = FastAPI(title="Resemin App Backend", version="1.7.0")
+if not DATABASE_URL:
+    # En Render debe estar seteada; si falta, lo advertimos
+    print("⚠️  DATABASE_URL no está configurada en el entorno. Configúrala en Render.")
+    
+# SQLAlchemy setup
+engine = create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
+SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False) if engine else None
+Base = declarative_base(metadata=MetaData())
+
+# Tablas: reemplazan employees/meta/config de SQLite con tipos Postgres
+class Employee(Base):
+    __tablename__ = "employees"
+    id = Column(Integer, primary_key=True, index=True)
+    data = Column(JSONB, nullable=False)  # fila completa del Excel como JSONB
+
+class MetaEntry(Base):
+    __tablename__ = "meta"
+    key = Column(String, primary_key=True)
+    value = Column(Text)  # guardaremos JSON en texto (p.ej. columnas)
+
+class Config(Base):
+    __tablename__ = "config"
+    id = Column(Integer, primary_key=True, index=True)
+    dni = Column(String)       # nombre de columna DNI
+    fecha = Column(String)     # nombre de columna FECHA
+    visibles = Column(JSONB)   # lista de columnas visibles (JSON)
+
+def init_db():
+    if engine is None:
+        return
+    Base.metadata.create_all(bind=engine)
+
+# ====== FastAPI ======
+app = FastAPI(title="Resemin App Backend", version="1.8.0")
 
 # ====== CORS ======
 ALLOWED_ORIGINS = [
     "http://127.0.0.1:5500",
     "http://localhost:5500",
-    "https://resemin-portal.netlify.app",  # <--- dominio exacto de Netlify
+    "https://resemin-portal.netlify.app",  # <-- tu dominio de Netlify
 ]
 app.add_middleware(
     CORSMiddleware,
@@ -50,58 +89,21 @@ async def log_requests(request: Request, call_next):
         logger.exception("Excepción durante request")
         raise
 
-# ====== DB init + migración ======
-def init_db():
-    con = sqlite3.connect(DB)
-    cur = con.cursor()
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS employees(
-        id INTEGER PRIMARY KEY AUTOINCREMENT,
-        data TEXT
-    )
-    """)
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS meta(
-        key TEXT PRIMARY KEY,
-        value TEXT
-    )
-    """)
-    cur.execute("""
-    CREATE TABLE IF NOT EXISTS config(
-        id INTEGER,
-        dni TEXT,
-        fecha TEXT,
-        visibles TEXT
-    )
-    """)
-    con.commit(); con.close()
-    ensure_config_schema()
-
-def ensure_config_schema():
-    con = sqlite3.connect(DB)
-    cur = con.cursor()
-    cur.execute("PRAGMA table_info(config)")
-    cols = [row[1] for row in cur.fetchall()]
-    if "id" not in cols:
-        try:
-            cur.execute("ALTER TABLE config ADD COLUMN id INTEGER")
-            cur.execute("UPDATE config SET id=1 WHERE id IS NULL")
-            con.commit()
-        except Exception:
-            cur.execute("CREATE TABLE IF NOT EXISTS config_new (id INTEGER, dni TEXT, fecha TEXT, visibles TEXT)")
-            cur.execute("INSERT INTO config_new (id, dni, fecha, visibles) SELECT 1, dni, fecha, visibles FROM config")
-            cur.execute("DROP TABLE config")
-            cur.execute("ALTER TABLE config_new RENAME TO config")
-            con.commit()
-    con.close()
-
-init_db()
+# ====== DB Session helper ======
+def get_db() -> Session:
+    if SessionLocal is None:
+        raise HTTPException(status_code=500, detail="DATABASE_URL no configurado en el servidor.")
+    db = SessionLocal()
+    try:
+        return db
+    finally:
+        pass  # el cierre lo hacemos manual donde corresponda
 
 # ====== Helpers para JSON y fechas ======
 def is_null_like(v) -> bool:
     """True para None, NaN, NaT, pd.NA."""
     try:
-        return pd.isna(v)   # cubre NaN, NaT, None y pd.NA
+        return pd.isna(v)  # cubre NaN, NaT, None y pd.NA
     except Exception:
         return v is None or (isinstance(v, float) and math.isnan(v))
 
@@ -154,32 +156,29 @@ def normalize_row(row_dict: dict) -> dict:
         out[str(k)] = to_json_scalar(v)
     return out
 
-# ====== Utilidades previas ======
+# ====== Seguridad Admin ======
 def check_admin(user: Optional[str], pwd: Optional[str]):
     if not ADMIN_PASSWORD or not ADMIN_USER:
         raise HTTPException(status_code=500, detail="ADMIN_USER/PASSWORD no configurados")
     if user != ADMIN_USER or pwd != ADMIN_PASSWORD:
         raise HTTPException(status_code=401, detail="Unauthorized")
 
-def set_meta(key: str, value: str):
-    con = sqlite3.connect(DB)
-    cur = con.cursor()
-    cur.execute(
-        "INSERT INTO meta(key, value) VALUES(?, ?) "
-        "ON CONFLICT(key) DO UPDATE SET value=excluded.value",
-        (key, value)
-    )
-    con.commit(); con.close()
+# ====== Meta helpers (PostgreSQL) ======
+def set_meta(db: Session, key: str, value: str):
+    entry = db.query(MetaEntry).filter(MetaEntry.key == key).first()
+    if entry:
+        entry.value = value
+    else:
+        entry = MetaEntry(key=key, value=value)
+        db.add(entry)
+    db.commit()
 
-def get_meta(key: str) -> Optional[str]:
-    con = sqlite3.connect(DB)
-    cur = con.cursor()
-    cur.execute("SELECT value FROM meta WHERE key=?", (key,))
-    row = cur.fetchone(); con.close()
-    return row[0] if row else None
+def get_meta(db: Session, key: str) -> Optional[str]:
+    entry = db.query(MetaEntry).filter(MetaEntry.key == key).first()
+    return entry.value if entry else None
 
-def get_last_columns() -> List[str]:
-    val = get_meta("columns")
+def get_last_columns(db: Session) -> List[str]:
+    val = get_meta(db, "columns")
     if val:
         try:
             cols = json.loads(val)
@@ -187,28 +186,21 @@ def get_last_columns() -> List[str]:
                 return [str(c) for c in cols]
         except Exception:
             pass
-    con = sqlite3.connect(DB)
-    cur = con.cursor()
-    cur.execute("SELECT data FROM employees LIMIT 1")
-    row = cur.fetchone(); con.close()
-    if row:
+    # Si no hay meta, intenta leer de la primera fila
+    first = db.query(Employee).first()
+    if first and first.data:
         try:
-            data = json.loads(row[0])
-            return list(map(str, data.keys()))
+            return list(map(str, first.data.keys()))
         except Exception:
             return []
     return []
 
-def get_config():
-    con = sqlite3.connect(DB)
-    cur = con.cursor()
-    cur.execute("SELECT dni, fecha, visibles FROM config WHERE id=1")
-    row = cur.fetchone(); con.close()
-    if not row:
+def get_config(db: Session):
+    cfg = db.query(Config).filter(Config.id == 1).first()
+    if not cfg:
         return None
-    dni_col, fecha_col, visibles_json = row
-    visibles = json.loads(visibles_json) if visibles_json else []
-    return {"dni": dni_col, "fecha": fecha_col, "visibles": visibles}
+    visibles = cfg.visibles if isinstance(cfg.visibles, list) else []
+    return {"dni": cfg.dni, "fecha": cfg.fecha, "visibles": visibles}
 
 def validate_columns_exist(dni_col: str, fecha_col: str, visibles: List[str], available: List[str]):
     missing = []
@@ -238,8 +230,11 @@ def root():
 def config_endpoint():
     return {
         "allowed_origins": ALLOWED_ORIGINS,
-        "version": "1.7.0",
+        "version": "1.8.0",
     }
+
+# Inicializa DB al levantar
+init_db()
 
 # ====== Login Admin ======
 @app.post("/admin/login")
@@ -258,7 +253,6 @@ async def admin_upload(
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
 ):
     check_admin(x_admin_user, x_admin_password)
-
     contents = await file.read()
     bio = BytesIO(contents)
 
@@ -272,18 +266,26 @@ async def admin_upload(
         except Exception as e2:
             raise HTTPException(status_code=400, detail=f"No se pudo leer el Excel. Usa .xlsx. Detalle: {e2}")
 
-    # Normaliza filas y guarda
     rows = [normalize_row(r) for _, r in df.iterrows()]
     columns = list(map(str, df.columns))
 
-    con = sqlite3.connect(DB); cur = con.cursor()
-    cur.execute("DELETE FROM employees")
-    for r in rows:
-        cur.execute("INSERT INTO employees(data) VALUES(?)", (json.dumps(r, ensure_ascii=False),))
-    con.commit(); con.close()
+    db = get_db()
+    try:
+        # "Último Excel manda": limpiar empleados previos
+        db.query(Employee).delete()
+        db.commit()
 
-    set_meta("columns", json.dumps(columns, ensure_ascii=False))
-    return {"columns": columns, "rows": len(rows)}
+        # Insertar filas
+        for r in rows:
+            db.add(Employee(data=r))
+        db.commit()
+
+        # Guardar meta: columnas
+        set_meta(db, "columns", json.dumps(columns, ensure_ascii=False))
+
+        return {"columns": columns, "rows": len(rows)}
+    finally:
+        db.close()
 
 # ====== ADMIN: Config (JSON) ======
 class ConfigPayload(BaseModel):
@@ -298,26 +300,35 @@ def admin_config(
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
 ):
     check_admin(x_admin_user, x_admin_password)
+
     dni_column = payload.dni_column.strip()
     fecha_column = payload.fecha_column.strip()
     visible_columns = payload.visible_columns or []
+
     if not dni_column or not fecha_column or not visible_columns:
         raise HTTPException(status_code=400, detail="Completa DNI, Fecha y columnas visibles")
 
-    available = get_last_columns()
-    if not available:
-        raise HTTPException(status_code=409, detail="No hay columnas cargadas aún. Primero suba el Excel en /admin/upload.")
+    db = get_db()
+    try:
+        available = get_last_columns(db)
+        if not available:
+            raise HTTPException(status_code=409, detail="No hay columnas cargadas aún. Primero suba el Excel en /admin/upload.")
+        validate_columns_exist(dni_column, fecha_column, visible_columns, available)
 
-    validate_columns_exist(dni_column, fecha_column, visible_columns, available)
+        # Guarda/actualiza Config con id=1
+        cfg = db.query(Config).filter(Config.id == 1).first()
+        if not cfg:
+            cfg = Config(id=1, dni=dni_column, fecha=fecha_column, visibles=visible_columns)
+            db.add(cfg)
+        else:
+            cfg.dni = dni_column
+            cfg.fecha = fecha_column
+            cfg.visibles = visible_columns
+        db.commit()
 
-    con = sqlite3.connect(DB); cur = con.cursor()
-    cur.execute("DELETE FROM config WHERE id=1")
-    cur.execute(
-        "INSERT INTO config(id, dni, fecha, visibles) VALUES(1, ?, ?, ?)",
-        (dni_column, fecha_column, json.dumps(visible_columns, ensure_ascii=False))
-    )
-    con.commit(); con.close()
-    return {"ok": True, "dni_column": dni_column, "fecha_column": fecha_column, "visible_columns": visible_columns}
+        return {"ok": True, "dni_column": dni_column, "fecha_column": fecha_column, "visible_columns": visible_columns}
+    finally:
+        db.close()
 
 @app.get("/admin/status")
 def admin_status(
@@ -325,74 +336,76 @@ def admin_status(
     x_admin_password: Optional[str] = Header(None, alias="X-Admin-Password"),
 ):
     check_admin(x_admin_user, x_admin_password)
-    con = sqlite3.connect(DB); cur = con.cursor()
-    cur.execute("SELECT COUNT(*) FROM employees")
-    employees_count = cur.fetchone()[0]
-    cfg = get_config()
-    con.close()
-    return {"employees": employees_count, "config": cfg}
+    db = get_db()
+    try:
+        employees_count = db.query(Employee).count()
+        cfg = get_config(db)
+        return {"employees": employees_count, "config": cfg}
+    finally:
+        db.close()
 
 # ====== Públicos ======
 @app.post("/consulta")
 def consulta(item: dict):
-    cfg = get_config()
-    if not cfg:
-        raise HTTPException(status_code=400, detail="No configurado")
-    dni_col = cfg["dni"]; fecha_col = cfg["fecha"]; visibles = cfg["visibles"]
+    db = get_db()
+    try:
+        cfg = get_config(db)
+        if not cfg:
+            raise HTTPException(status_code=400, detail="No configurado")
+        dni_col = cfg["dni"]; fecha_col = cfg["fecha"]; visibles = cfg["visibles"]
 
-    # Normaliza la fecha del payload (acepta DD/MM/YYYY o ISO)
-    req_dni = str(item.get("dni", ""))
-    req_fecha = parse_input_date(str(item.get("fecha", "")))
+        # Normaliza la fecha del payload (acepta DD/MM/YYYY o ISO)
+        req_dni = str(item.get("dni", ""))
+        req_fecha = parse_input_date(str(item.get("fecha", "")))
 
-    con = sqlite3.connect(DB); cur = con.cursor()
-    cur.execute("SELECT data FROM employees")
-    res = []
-    for (row,) in cur.fetchall():
-        data = json.loads(row)
-        db_dni = str(data.get(dni_col, ""))
-        db_fecha = parse_input_date(str(data.get(fecha_col, "")))  # ISO esperado
-
-        if db_dni == req_dni and db_fecha == req_fecha:
-            # Sanea valores visibles (sin NaN)
-            res.append({k: to_json_scalar(data.get(k)) for k in visibles})
-    con.close()
-    return {"results": res}
+        res = []
+        for emp in db.query(Employee).all():
+            data = emp.data or {}
+            db_dni = str(data.get(dni_col, ""))
+            db_fecha = parse_input_date(str(data.get(fecha_col, "")))  # ISO esperado
+            if db_dni == req_dni and db_fecha == req_fecha:
+                res.append({k: to_json_scalar(data.get(k)) for k in visibles})
+        return {"results": res}
+    finally:
+        db.close()
 
 @app.get("/public/columns")
 def public_columns():
-    cfg = get_config()
-    if not cfg:
-        raise HTTPException(status_code=404, detail="No hay configuración guardada")
-    return {"visible_columns": cfg["visibles"]}
+    db = get_db()
+    try:
+        cfg = get_config(db)
+        if not cfg:
+            raise HTTPException(status_code=404, detail="No hay configuración guardada")
+        return {"visible_columns": cfg["visibles"]}
+    finally:
+        db.close()
 
 @app.get("/public/query")
 def public_query(dni: str = Query(...), fecha: str = Query(...)):
+    db = get_db()
     try:
-        cfg = get_config()
+        cfg = get_config(db)
         if not cfg:
             return {"found": False, "message": "No hay configuración guardada"}
         dni_col = cfg["dni"]; fecha_col = cfg["fecha"]; visibles = cfg["visibles"]
 
-        available = get_last_columns()
+        available = get_last_columns(db)
         validate_columns_exist(dni_col, fecha_col, visibles, available)
 
         # Normaliza fecha del query param
         req_dni = str(dni)
         req_fecha = parse_input_date(str(fecha))
 
-        con = sqlite3.connect(DB); cur = con.cursor()
-        cur.execute("SELECT data FROM employees")
-        for (row,) in cur.fetchall():
-            data = json.loads(row)
+        for emp in db.query(Employee).all():
+            data = emp.data or {}
             db_dni = str(data.get(dni_col, ""))
             db_fecha = parse_input_date(str(data.get(fecha_col, "")))  # ISO esperado
-
             if db_dni == req_dni and db_fecha == req_fecha:
-                con.close()
                 return {"found": True, "data": {k: to_json_scalar(data.get(k)) for k in visibles}}
-        con.close()
         return {"found": False, "message": "No se encontró registro para ese DNI y fecha"}
     except HTTPException as he:
         raise he
     except Exception as e:
         return {"found": False, "message": f"Error interno: {str(e)}"}
+    finally:
+        db.close()

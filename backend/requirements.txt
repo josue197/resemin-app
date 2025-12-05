@@ -6,3 +6,5 @@ openpyxl         # para .xlsx
 xlrd             # para .xls antiguos
 python-multipart # para uploads form-data
 python-dotenv
+sqlalchemy
+psycopg2-binary
