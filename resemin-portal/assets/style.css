@@ -68,19 +68,11 @@ body { background: var(--bg); color: var(--text); }
 .result-table th { width: 35%; }
 .result-table td, .result-table th { border-color: var(--border); }
 
-/* Datepicker con ícono */
-.input-with-icon {
-  position: relative;
-}
-.input-with-icon .calendar-icon {
-  position: absolute;
-  right: 12px;
-  top: 50%;
-  transform: translateY(-50%);
-  color: var(--muted);
-  pointer-events: none;
-}
+/* ===== Opción A: Sin ícono manual en el datepicker ===== */
+/* Eliminamos reglas de .input-with-icon y .calendar-icon para evitar duplicados */
+/* Si deseas conservar algo de spacing, no es necesario para el nativo. */
 
 /* Modal base */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); }
 .modal-dialog { margin: 10% auto; max-width: 520px; }
+``
