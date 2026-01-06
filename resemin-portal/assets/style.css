@@ -9,14 +9,15 @@
   --border: #e5e7eb;
 }
 
+/* ===== Modo oscuro mejorado ===== */
 [data-theme="dark"] {
-  --bg: #0f172a;
-  --card-bg: #111827;
-  --text: #e5e7eb;
-  --muted: #9ca3af;
-  --primary: #60a5fa;
-  --primary-contrast: #0b1020;
-  --border: #374151;
+  --bg: #0f172a;              /* Fondo general (azul muy oscuro) */
+  --card-bg: #1e293b;         /* Fondo de tarjetas y navbar (gris azulado) */
+  --text: #f1f5f9;            /* Texto principal (casi blanco) */
+  --muted: #94a3b8;           /* Texto secundario (gris claro) */
+  --primary: #3b82f6;         /* Azul vivo (botones/acciones) */
+  --primary-contrast: #ffffff;/* Texto sobre botones */
+  --border: #334155;          /* Bordes sutiles */
 }
 
 html, body { height: 100%; }
@@ -25,6 +26,13 @@ body { background: var(--bg); color: var(--text); }
 .navbar, .card {
   background: var(--card-bg) !important;
   border-color: var(--border) !important;
+}
+
+/* Bordes más suaves en tarjetas */
+.card {
+  border-width: 1px;
+  border-style: solid;
+  box-shadow: 0 8px 24px rgba(2, 8, 23, 0.35);
 }
 
 .brand-badge {
@@ -52,10 +60,24 @@ body { background: var(--bg); color: var(--text); }
 }
 .form-control::placeholder { color: var(--muted); }
 
+/* Placeholder visible en modo oscuro */
+[data-theme="dark"] .form-control::placeholder {
+  color: #94a3b8;
+}
+
+/* Ícono del datepicker (nativo): que no se opaque demasiado en dark */
+input[type="date"] {
+  color-scheme: light dark; /* permite que el control se adapte al tema */
+}
+
+/* Botones */
 .btn-primary {
   background-color: var(--primary);
   border-color: var(--primary);
   color: var(--primary-contrast);
+}
+.btn-primary:hover {
+  filter: brightness(1.06);
 }
 
 .btn-outline-primary { color: var(--primary); border-color: var(--primary); }
@@ -68,11 +90,16 @@ body { background: var(--bg); color: var(--text); }
 .result-table th { width: 35%; }
 .result-table td, .result-table th { border-color: var(--border); }
 
-/* ===== Opción A: Sin ícono manual en el datepicker ===== */
-/* Eliminamos reglas de .input-with-icon y .calendar-icon para evitar duplicados */
-/* Si deseas conservar algo de spacing, no es necesario para el nativo. */
+/* Títulos y textos secundarios dentro de la card para mejorar contraste */
+.card .h4, .card h4, .card h2, .card .text-muted {
+  color: var(--text);
+  opacity: 0.92;
+}
+
+/* ===== Eliminado: estilos del ícono manual del datepicker =====
+   (no usamos .input-with-icon ni .calendar-icon en la Opción A)
+*/
 
 /* Modal base */
 .modal { position: fixed; inset: 0; background: rgba(0,0,0,.35); }
 .modal-dialog { margin: 10% auto; max-width: 520px; }
-``
