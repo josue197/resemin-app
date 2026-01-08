@@ -1,6 +1,6 @@
 
 # backend/main.py
-from fastapi import FastAPI, UploadFile, File, Header, HTTPException, Body, Query, Request, Form
+from fastapi import FastAPI, UploadFile, File, Header, HTTPException, Body, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pathlib import Path
 from dotenv import load_dotenv
@@ -13,7 +13,7 @@ from pydantic import BaseModel, Field
 import logging
 
 # ==== SQLAlchemy (PostgreSQL / Supabase) ====
-from sqlalchemy import create_engine, Column, Integer, String, Date, Text, MetaData
+from sqlalchemy import create_engine, Column, Integer, String, Text, MetaData, text
 from sqlalchemy.orm import sessionmaker, declarative_base, Session
 from sqlalchemy.dialects.postgresql import JSONB
 
@@ -28,7 +28,7 @@ DATABASE_URL = os.getenv("DATABASE_URL")  # <-- usa Supabase; ya NO usamos DB_PA
 if not DATABASE_URL:
     # En Render debe estar seteada; si falta, lo advertimos
     print("⚠️  DATABASE_URL no está configurada en el entorno. Configúrala en Render.")
-    
+
 # SQLAlchemy setup
 engine = create_engine(DATABASE_URL, pool_pre_ping=True) if DATABASE_URL else None
 SessionLocal = sessionmaker(bind=engine, autoflush=False, autocommit=False) if engine else None
@@ -49,7 +49,7 @@ class Config(Base):
     __tablename__ = "config"
     id = Column(Integer, primary_key=True, index=True)
     dni = Column(String)       # nombre de columna DNI
-    fecha = Column(String)     # nombre de columna FECHA
+    fecha = Column(String)     # nombre de columna FECHA (elige "FECHA NACIMIENTO")
     visibles = Column(JSONB)   # lista de columnas visibles (JSON)
 
 def init_db():
@@ -58,7 +58,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 # ====== FastAPI ======
-app = FastAPI(title="Resemin App Backend", version="1.8.0")
+app = FastAPI(title="Resemin App Backend", version="1.9.0")
 
 # ====== CORS ======
 ALLOWED_ORIGINS = [
@@ -230,7 +230,7 @@ def root():
 def config_endpoint():
     return {
         "allowed_origins": ALLOWED_ORIGINS,
-        "version": "1.8.0",
+        "version": "1.9.0",
     }
 
 # Inicializa DB al levantar
@@ -290,7 +290,7 @@ async def admin_upload(
 # ====== ADMIN: Config (JSON) ======
 class ConfigPayload(BaseModel):
     dni_column: str = Field(..., description="Nombre de la columna DNI")
-    fecha_column: str = Field(..., description="Nombre de la columna Fecha")
+    fecha_column: str = Field(..., description="Nombre de la columna Fecha (ej. 'FECHA NACIMIENTO')")
     visible_columns: List[str] = Field(..., description="Columnas visibles en consultas públicas")
 
 @app.post("/admin/config")
@@ -347,6 +347,10 @@ def admin_status(
 # ====== Públicos ======
 @app.post("/consulta")
 def consulta(item: dict):
+    """
+    Consulta pública usando POST. Devuelve lista de coincidencias (varios periodos).
+    Filtra por DNI y por la columna configurada como Fecha (usa parse_input_date).
+    """
     db = get_db()
     try:
         cfg = get_config(db)
@@ -354,17 +358,27 @@ def consulta(item: dict):
             raise HTTPException(status_code=400, detail="No configurado")
         dni_col = cfg["dni"]; fecha_col = cfg["fecha"]; visibles = cfg["visibles"]
 
+        available = get_last_columns(db)
+        validate_columns_exist(dni_col, fecha_col, visibles, available)
+
         # Normaliza la fecha del payload (acepta DD/MM/YYYY o ISO)
-        req_dni = str(item.get("dni", ""))
-        req_fecha = parse_input_date(str(item.get("fecha", "")))
+        req_dni = str(item.get("dni", "")).strip()
+        req_fecha = parse_input_date(str(item.get("fecha", "")).strip())
+
+        # Consulta eficiente en JSONB (PostgreSQL/Supabase)
+        sql = text(f"""
+            SELECT data
+            FROM employees
+            WHERE data->>'{dni_col}' = :dni
+              AND data->>'{fecha_col}' = :fecha
+        """)
+        rows = db.execute(sql, {"dni": req_dni, "fecha": req_fecha}).fetchall()
 
         res = []
-        for emp in db.query(Employee).all():
-            data = emp.data or {}
-            db_dni = str(data.get(dni_col, ""))
-            db_fecha = parse_input_date(str(data.get(fecha_col, "")))  # ISO esperado
-            if db_dni == req_dni and db_fecha == req_fecha:
-                res.append({k: to_json_scalar(data.get(k)) for k in visibles})
+        for row in rows:
+            data = row[0] or {}
+            res.append({k: to_json_scalar(data.get(k)) for k in visibles})
+
         return {"results": res}
     finally:
         db.close()
@@ -382,6 +396,10 @@ def public_columns():
 
 @app.get("/public/query")
 def public_query(dni: str = Query(...), fecha: str = Query(...)):
+    """
+    Consulta pública usando GET (parámetros en URL). Devuelve lista de coincidencias (varios periodos).
+    Filtra por DNI y por la columna configurada como Fecha (usa parse_input_date).
+    """
     db = get_db()
     try:
         cfg = get_config(db)
@@ -393,19 +411,31 @@ def public_query(dni: str = Query(...), fecha: str = Query(...)):
         validate_columns_exist(dni_col, fecha_col, visibles, available)
 
         # Normaliza fecha del query param
-        req_dni = str(dni)
-        req_fecha = parse_input_date(str(fecha))
+        req_dni = str(dni).strip()
+        req_fecha = parse_input_date(str(fecha).strip())
 
-        for emp in db.query(Employee).all():
-            data = emp.data or {}
-            db_dni = str(data.get(dni_col, ""))
-            db_fecha = parse_input_date(str(data.get(fecha_col, "")))  # ISO esperado
-            if db_dni == req_dni and db_fecha == req_fecha:
-                return {"found": True, "data": {k: to_json_scalar(data.get(k)) for k in visibles}}
-        return {"found": False, "message": "No se encontró registro para ese DNI y fecha"}
+        # Consulta eficiente en JSONB (PostgreSQL/Supabase)
+        sql = text(f"""
+            SELECT data
+            FROM employees
+            WHERE data->>'{dni_col}' = :dni
+              AND data->>'{fecha_col}' = :fecha
+        """)
+        rows = db.execute(sql, {"dni": req_dni, "fecha": req_fecha}).fetchall()
+
+        matches = []
+        for row in rows:
+            data = row[0] or {}
+            matches.append({k: to_json_scalar(data.get(k)) for k in visibles})
+
+        if matches:
+            return {"found": True, "results": matches}
+        else:
+            return {"found": False, "message": "No se encontró registro para ese DNI y fecha"}
     except HTTPException as he:
         raise he
     except Exception as e:
         return {"found": False, "message": f"Error interno: {str(e)}"}
     finally:
         db.close()
+``
