@@ -218,6 +218,7 @@ async function consultarSubmit(ev) {
 }
 
 // ==== Render resultado (múltiples periodos) ====
+
 function renderResultado(data) {
   const contenedor = document.getElementById('resultado');
   contenedor.innerHTML = '';
@@ -253,18 +254,24 @@ function renderResultado(data) {
   `).join('');
 
   contenedor.insertAdjacentHTML('beforeend', `
-    <table class="table table-sm table-striped">
-      <thead>
-        <tr>
-          <th>Periodo</th>
-          <th>Fecha ingreso</th>
-          <th>Días pendientes</th>
-          <th>Vencimiento</th>
-          <th>Observación</th>
-        </tr>
-      </thead>
-      <tbody>${tbody}</tbody>
-    </table>
+    <div class="card">
+      <div class="card-body">
+        <div class="table-responsive">
+          <table class="table table-sm table-striped tabla-resultados">
+            <thead>
+              <tr>
+                <th>Periodo</th>
+                <th>Fecha ingreso</th>
+                <th>Días pendientes</th>
+                <th>Vencimiento</th>
+                <th>Observación</th>
+              </tr>
+            </thead>
+            <tbody>${tbody}</tbody>
+          </table>
+        </div>
+      </div>
+    </div>
   `);
 }
 
