@@ -438,4 +438,3 @@ def public_query(dni: str = Query(...), fecha: str = Query(...)):
         return {"found": False, "message": f"Error interno: {str(e)}"}
     finally:
         db.close()
-``
