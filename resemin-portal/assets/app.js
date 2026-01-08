@@ -14,15 +14,15 @@ function applyTheme(theme) {
     localStorage.setItem("THEME", t);
 
     const toggle = document.getElementById("theme-toggle");
-    if (!toggle) return; // si no existe en esta página, no pasa nada
+    if (!toggle) return;
 
     const icon = toggle.querySelector("i");
     const label = toggle.querySelector("span");
     if (t === "dark") {
-      if (icon)  icon.className = "bi bi-sun";
+      if (icon) icon.className = "bi bi-sun";
       if (label) label.textContent = "Modo día";
     } else {
-      if (icon)  icon.className = "bi bi-moon";
+      if (icon) icon.className = "bi bi-moon";
       if (label) label.textContent = "Modo noche";
     }
   } catch (err) {
@@ -184,19 +184,6 @@ async function saveConfig(ev) {
 }
 
 // ==== Consulta pública ====
-const LABELS = {
-  EMPRESA: "Código Empresa",
-  DESCRIPCION_EMPRESA: "Empresa",
-  TRABAJADOR: "DNI",
-  NOMBRE_TRABAJADOR: "Nombre",
-  TIPO_DOCUMENTO: "Tipo de documento",
-  NUMERO_DOCUMENTO: "N° documento",
-  DESCRIPCION_PLANILLA: "Planilla",
-  DESCIPCION_PUESTO_TRABAJADOR: "Puesto",
-  FECHA_INGRESO_EMPRESA: "Fecha de ingreso",
-  FECHA_CESE: "Fecha de cese",
-};
-
 async function consultarSubmit(ev) {
   ev.preventDefault();
   const dni = document.getElementById("dni")?.value.trim();
@@ -209,7 +196,6 @@ async function consultarSubmit(ev) {
   resultBox.innerHTML = "";
   if (!dni || !fecha) { showAlert(alertBox, "warning", "Completa DNI y Fecha."); return; }
 
-  // type="date" -> YYYY-MM-DD; si el usuario escribe dd/mm/yyyy, lo normalizamos
   fecha = maybeToISODate(fecha);
 
   try {
@@ -225,31 +211,65 @@ async function consultarSubmit(ev) {
     if (!data.found) { showAlert(alertBox, "danger", data.message || "No encontrado"); return; }
     hideAlert(alertBox);
 
-    const record = data.data || {};
-    const rows = Object.entries(record).map(([k, v]) => {
-      const label = LABELS[k] || k;
-      return `<tr><th scope="row">${label}</th><td>${v ?? ""}</td></tr>`;
-    }).join("");
-
-    resultBox.innerHTML = `
-      <div class="card mt-3">
-        <div class="card-header">Resultado</div>
-        <div class="card-body">
-          <div class="table-responsive">
-            <table class="table result-table">
-              <tbody>${rows}</tbody>
-            </table>
-          </div>
-        </div>
-      </div>`;
+    renderResultado(data);
   } catch (e) {
     showAlert(alertBox, "danger", `Error: ${e.message}`);
   }
 }
 
+// ==== Render resultado (múltiples periodos) ====
+function renderResultado(data) {
+  const contenedor = document.getElementById('resultado');
+  contenedor.innerHTML = '';
+
+  const resultados = data.results || [];
+  if (!Array.isArray(resultados) || resultados.length === 0) {
+    contenedor.innerHTML = '<div class="alert alert-info">No se encontraron registros.</div>';
+    return;
+  }
+
+  // Cabecera con DNI y Nombre
+  const persona = resultados[0];
+  contenedor.insertAdjacentHTML('beforeend', `
+    <div class="card mb-3">
+      <div class="card-body">
+        <div class="row">
+          <div class="col-12 col-md-6"><strong>DNI:</strong> ${persona.DNI ?? '-'}</div>
+          <div class="col-12 col-md-6"><strong>Apellidos y Nombres:</strong> ${persona.APELLIDOS_NOMBRES ?? '-'}</div>
+        </div>
+      </div>
+    </div>
+  `);
+
+  // Tabla con todos los periodos
+  const tbody = resultados.map(r => `
+    <tr>
+      <td>${r.PERIODO_VACACIONAL ?? '-'}</td>
+      <td>${r.FECHA_INGRESO ?? '-'}</td>
+      <td>${r.DIAS_PENDIENTES ?? '-'}</td>
+      <td>${r.VENCIMIENTO ?? '-'}</td>
+      <td>${r.OBSERVACION ?? '-'}</td>
+    </tr>
+  `).join('');
+
+  contenedor.insertAdjacentHTML('beforeend', `
+    <table class="table table-sm table-striped">
+      <thead>
+        <tr>
+          <th>Periodo</th>
+          <th>Fecha ingreso</th>
+          <th>Días pendientes</th>
+          <th>Vencimiento</th>
+          <th>Observación</th>
+        </tr>
+      </thead>
+      <tbody>${tbody}</tbody>
+    </table>
+  `);
+}
+
 // ==== INIT RESILIENTE ====
 document.addEventListener("DOMContentLoaded", () => {
-  // Tema + toggle
   applyTheme();
   const toggle = document.getElementById("theme-toggle");
   if (toggle) toggle.addEventListener("click", () => {
@@ -257,27 +277,23 @@ document.addEventListener("DOMContentLoaded", () => {
     applyTheme(curr === "dark" ? "light" : "dark");
   });
 
-  // Admin botones
   document.getElementById("admin-login-btn")?.addEventListener("click", openAdminLogin);
   document.getElementById("admin-logout-btn")?.addEventListener("click", doAdminLogout);
 
-  // Formularios
   document.getElementById("admin-login-form")?.addEventListener("submit", doAdminLogin);
   document.getElementById("upload-form")?.addEventListener("submit", uploadExcel);
   document.getElementById("config-form")?.addEventListener("submit", saveConfig);
   document.getElementById("btn-select-all")?.addEventListener("click", selectAll);
   document.getElementById("btn-clear-all")?.addEventListener("click", clearAll);
 
-  // Consulta (index)
   document.getElementById("consulta-form")?.addEventListener("submit", consultarSubmit);
 
-  // Restaurar sesión (admin)
   if (ADMIN) {
     const panel = document.getElementById("admin-panel");
     const btnLogin = document.getElementById("admin-login-btn");
     const btnLogout = document.getElementById("admin-logout-btn");
-    if (panel)      panel.style.display    = "block";
-    if (btnLogin)   btnLogin.style.display = "none";
-    if (btnLogout)  btnLogout.style.display= "inline-block";
+    if (panel) panel.style.display = "block";
+    if (btnLogin) btnLogin.style.display = "none";
+    if (btnLogout) btnLogout.style.display = "inline-block";
   }
 });
