@@ -49,7 +49,7 @@ class Config(Base):
     __tablename__ = "config"
     id = Column(Integer, primary_key=True, index=True)
     dni = Column(String)       # nombre de columna DNI
-    fecha = Column(String)     # nombre de columna FECHA (elige "FECHA NACIMIENTO")
+    fecha = Column(String)     # nombre de columna FECHA (ej. 'FECHA NACIMIENTO')
     visibles = Column(JSONB)   # lista de columnas visibles (JSON)
 
 def init_db():
@@ -58,7 +58,7 @@ def init_db():
     Base.metadata.create_all(bind=engine)
 
 # ====== FastAPI ======
-app = FastAPI(title="Resemin App Backend", version="1.9.0")
+app = FastAPI(title="Resemin App Backend", version="1.9.1")
 
 # ====== CORS ======
 ALLOWED_ORIGINS = [
@@ -230,7 +230,7 @@ def root():
 def config_endpoint():
     return {
         "allowed_origins": ALLOWED_ORIGINS,
-        "version": "1.9.0",
+        "version": "1.9.1",
     }
 
 # Inicializa DB al levantar
@@ -429,7 +429,9 @@ def public_query(dni: str = Query(...), fecha: str = Query(...)):
             matches.append({k: to_json_scalar(data.get(k)) for k in visibles})
 
         if matches:
-            return {"found": True, "results": matches}
+            # Compatibilidad: además de 'results', exponemos 'data' como el primer elemento
+            first = matches[0]
+            return {"found": True, "data": first, "results": matches}
         else:
             return {"found": False, "message": "No se encontró registro para ese DNI y fecha"}
     except HTTPException as he:
