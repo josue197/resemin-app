@@ -2,11 +2,11 @@
   --bg: #f6f7fb;
   --card-bg: #ffffff;
   --text: #1f2937;
-  --muted: #6b7280;
   --primary: #2563eb;
   --border: #e5e7eb;
 }
 
+/* MODO OSCURO */
 [data-theme="dark"] {
   --bg: #0f172a;
   --card-bg: #1e293b;
@@ -20,21 +20,25 @@ body {
   color: var(--text);
 }
 
-/* ✅ LOGO R BONITO */
+/* ✅ LOGO PRO (MEJORADO 🔥) */
 .nav-title {
   font-weight: 600;
   text-decoration: none;
+  color: var(--text);
 }
 
 .nav-title::first-letter {
-  background: var(--primary);
+  display: inline-block;
+  background: linear-gradient(135deg, #2563eb, #3b82f6);
   color: white;
-  padding: 3px 7px;
-  border-radius: 6px;
-  margin-right: 4px;
+  padding: 6px 10px;
+  border-radius: 8px;
+  margin-right: 6px;
+  font-weight: bold;
+  box-shadow: 0 2px 6px rgba(0,0,0,0.2);
 }
 
-/* ===== CARD ===== */
+/* CARDS */
 .card {
   background: var(--card-bg);
   border: 1px solid var(--border);
@@ -42,93 +46,51 @@ body {
 }
 
 /* ===== TABLA ===== */
+
 .tabla-resultados {
   width: 100%;
-  table-layout: fixed;
+  table-layout: auto; /* 🔥 CLAVE */
   border-collapse: collapse;
   font-size: 14px;
 }
 
-/* ✅ ENCABEZADOS (SOLUCIÓN CLAVE 🔥) */
+/* ✅ ENCABEZADOS PERFECTOS */
 .tabla-resultados thead th {
   text-align: center;
   vertical-align: middle;
-
-  font-weight: 600;
   padding: 12px;
-
   border-bottom: 2px solid var(--border);
 
-  white-space: normal !important;
-  word-break: normal !important;
-  overflow-wrap: normal !important;
-
-  line-height: 1.3;
+  font-weight: 600;
+  white-space: nowrap; /* 🔥 NO rompe palabras */
 }
 
-/* ✅ EVITA QUE SE ROMPAN PALABRAS */
-.tabla-resultados thead th {
-  hyphens: none;
-}
-
-/* ✅ CELDAS */
+/* ✅ CONTENIDO */
 .tabla-resultados td {
   text-align: center;
-  vertical-align: middle;
   padding: 12px;
   border-bottom: 1px solid var(--border);
 }
 
-/* ===== DISTRIBUCIÓN CORRECTA ===== */
-
-/* Periodo */
-.tabla-resultados th:nth-child(1),
-.tabla-resultados td:nth-child(1) {
-  width: 15%;
-}
-
-/* Días pendientes */
-.tabla-resultados th:nth-child(2),
-.tabla-resultados td:nth-child(2) {
-  width: 14%;
-  font-weight: 600;
-}
-
-/* Vencimiento */
-.tabla-resultados th:nth-child(3),
+/* ✅ VENCIMIENTO */
 .tabla-resultados td:nth-child(3) {
-  width: 32%;
   text-align: left;
+  white-space: normal;
 }
 
-/* Observación */
-.tabla-resultados th:nth-child(4),
-.tabla-resultados td:nth-child(4) {
-  width: 13%;
-}
-
-/* Sábados */
-.tabla-resultados th:nth-child(5),
-.tabla-resultados td:nth-child(5) {
-  width: 13%;
-  color: var(--primary);
-  font-weight: bold;
-}
-
-/* Domingos */
-.tabla-resultados th:nth-child(6),
+/* ✅ RESALTAR FINES DE SEMANA */
+.tabla-resultados td:nth-child(5),
 .tabla-resultados td:nth-child(6) {
-  width: 13%;
   color: var(--primary);
   font-weight: bold;
 }
 
-/* ✅ HOVER */
+/* HOVER */
 .tabla-resultados tbody tr:hover {
   background: rgba(37, 99, 235, 0.06);
 }
 
-/* ===== RESPONSIVE ===== */
+/* RESPONSIVE */
 .table-responsive {
   overflow-x: auto;
 }
@@ -140,4 +102,3 @@ body {
     padding: 6px;
   }
 }
-``
