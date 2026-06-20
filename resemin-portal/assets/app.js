@@ -235,7 +235,7 @@ function renderResultado(data) {
     <div class="card mb-3">
       <div class="card-body">
         <div class="row">
-          <div class="col-12 col-md-6"><strong>DNI:</strong> ${persona.DNI ?? '-'}</div>
+          <div class="col-12 col-md-6"><strong>DNI:</strong> ${persona.TRABAJADOR ?? '-'}</div>
           <div class="col-12 col-md-6"><strong>Apellidos y Nombres:</strong> ${persona.APELLIDOS_NOMBRES ?? '-'}</div>
         </div>
       </div>
@@ -250,6 +250,8 @@ function renderResultado(data) {
       <td>${r.DIAS_PENDIENTES ?? '-'}</td>
       <td>${r.VENCIMIENTO ?? '-'}</td>
       <td>${r.OBSERVACION ?? '-'}</td>
+      <td>${r["SÁBADOS CONSUMIDOS"] ?? 0}</td>
+      <td>${r["DOMINGOS CONSUMIDOS"] ?? 0}</td>
     </tr>
   `).join('');
 
