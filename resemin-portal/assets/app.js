@@ -263,10 +263,12 @@ function renderResultado(data) {
             <thead>
               <tr>
                 <th>Periodo</th>
-                <th>Fecha ingreso</th>
+                <th>Ingreso</th>
                 <th>Días pendientes</th>
                 <th>Vencimiento</th>
                 <th>Observación</th>
+                <th>Sábados consumidos</th>
+                <th>Domingos consumidos</th>
               </tr>
             </thead>
             <tbody>${tbody}</tbody>
