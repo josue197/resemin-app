@@ -3,68 +3,45 @@
   --card-bg: #ffffff;
   --text: #1f2937;
   --muted: #6b7280;
-  --primary: #1d4ed8;
-  --primary-contrast: #ffffff;
+  --primary: #2563eb;
   --border: #e5e7eb;
 }
 
-/* ===== Modo oscuro ===== */
 [data-theme="dark"] {
   --bg: #0f172a;
   --card-bg: #1e293b;
   --text: #f1f5f9;
-  --muted: #94a3b8;
   --primary: #3b82f6;
   --border: #334155;
 }
 
-html, body { height: 100%; }
-body { background: var(--bg); color: var(--text); }
+body {
+  background: var(--bg);
+  color: var(--text);
+}
 
-/* ✅ ===== LOGO / TÍTULO (ARREGLA TU R AZUL) ===== */
-.nav-title,
-.nav-title a {
-  color: var(--primary) !important;
+/* ✅ LOGO R BONITO */
+.nav-title {
   font-weight: 600;
   text-decoration: none;
 }
 
-.nav-title:hover {
-  text-decoration: underline;
+.nav-title::first-letter {
+  background: var(--primary);
+  color: white;
+  padding: 3px 7px;
+  border-radius: 6px;
+  margin-right: 4px;
 }
 
-/* ===== Cards ===== */
+/* ===== CARD ===== */
 .card {
   background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
 }
 
-/* ===== Inputs ===== */
-.form-control {
-  background: var(--card-bg);
-  border-color: var(--border);
-}
-
-/* ===== Botones ===== */
-.btn-primary {
-  background-color: var(--primary);
-  border-color: var(--primary);
-}
-
-/* ===== Contenedor ===== */
-.container {
-  max-width: 1200px;
-}
-
-/* ===== INFO SUPERIOR (DNI) ===== */
-#resultado .card:first-child {
-  padding: 12px 18px;
-  font-size: 14px;
-}
-
-/* ===== TABLA PERFECTA ===== */
+/* ===== TABLA ===== */
 .tabla-resultados {
   width: 100%;
   table-layout: fixed;
@@ -72,20 +49,26 @@ body { background: var(--bg); color: var(--text); }
   font-size: 14px;
 }
 
-/* ✅ ENCABEZADOS PERFECTAMENTE CENTRADOS */
+/* ✅ ENCABEZADOS (SOLUCIÓN CLAVE 🔥) */
 .tabla-resultados thead th {
   text-align: center;
   vertical-align: middle;
+
   font-weight: 600;
   padding: 12px;
 
   border-bottom: 2px solid var(--border);
 
-  white-space: normal;       /* permite salto */
-  word-break: keep-all;      /* NO rompe palabras */
-  overflow-wrap: break-word;
+  white-space: normal !important;
+  word-break: normal !important;
+  overflow-wrap: normal !important;
 
   line-height: 1.3;
+}
+
+/* ✅ EVITA QUE SE ROMPAN PALABRAS */
+.tabla-resultados thead th {
+  hyphens: none;
 }
 
 /* ✅ CELDAS */
@@ -96,55 +79,53 @@ body { background: var(--bg); color: var(--text); }
   border-bottom: 1px solid var(--border);
 }
 
-/* ===== DISTRIBUCIÓN PERFECTA ===== */
+/* ===== DISTRIBUCIÓN CORRECTA ===== */
 
-/* 1. Periodo */
+/* Periodo */
 .tabla-resultados th:nth-child(1),
 .tabla-resultados td:nth-child(1) {
-  width: 16%;
-  font-weight: 500;
+  width: 15%;
 }
 
-/* 2. Días */
+/* Días pendientes */
 .tabla-resultados th:nth-child(2),
 .tabla-resultados td:nth-child(2) {
-  width: 12%;
+  width: 14%;
   font-weight: 600;
 }
 
-/* 3. Vencimiento */
+/* Vencimiento */
 .tabla-resultados th:nth-child(3),
 .tabla-resultados td:nth-child(3) {
-  width: 34%;
+  width: 32%;
   text-align: left;
-  line-height: 1.4;
 }
 
-/* 4. Observación */
+/* Observación */
 .tabla-resultados th:nth-child(4),
 .tabla-resultados td:nth-child(4) {
-  width: 12%;
+  width: 13%;
 }
 
-/* 5. Sábados */
+/* Sábados */
 .tabla-resultados th:nth-child(5),
 .tabla-resultados td:nth-child(5) {
   width: 13%;
-  font-weight: bold;
   color: var(--primary);
+  font-weight: bold;
 }
 
-/* 6. Domingos */
+/* Domingos */
 .tabla-resultados th:nth-child(6),
 .tabla-resultados td:nth-child(6) {
   width: 13%;
-  font-weight: bold;
   color: var(--primary);
+  font-weight: bold;
 }
 
 /* ✅ HOVER */
 .tabla-resultados tbody tr:hover {
-  background: rgba(59, 130, 246, 0.06);
+  background: rgba(37, 99, 235, 0.06);
 }
 
 /* ===== RESPONSIVE ===== */
@@ -153,21 +134,10 @@ body { background: var(--bg); color: var(--text); }
 }
 
 @media (max-width: 768px) {
-  .tabla-resultados td,
-  .tabla-resultados th {
+  .tabla-resultados th,
+  .tabla-resultados td {
     font-size: 12px;
     padding: 6px;
   }
 }
-
-/* ===== MODAL ===== */
-.modal { 
-  position: fixed; 
-  inset: 0; 
-  background: rgba(0,0,0,.35); 
-}
-
-.modal-dialog { 
-  margin: 10% auto; 
-  max-width: 520px; 
-}
+``
