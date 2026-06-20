@@ -15,33 +15,25 @@
   --text: #f1f5f9;
   --muted: #94a3b8;
   --primary: #3b82f6;
-  --primary-contrast: #ffffff;
   --border: #334155;
 }
 
 html, body { height: 100%; }
 body { background: var(--bg); color: var(--text); }
 
-/* ===== Navbar y Cards ===== */
-.navbar, .card {
-  background: var(--card-bg) !important;
-  border-color: var(--border) !important;
-}
-
+/* ===== Cards ===== */
 .card {
+  background: var(--card-bg);
   border: 1px solid var(--border);
   border-radius: 12px;
-  box-shadow: 0 8px 24px rgba(2, 8, 23, 0.12);
+  box-shadow: 0 6px 18px rgba(0,0,0,0.08);
 }
 
-/* ===== Formularios ===== */
-.form-control, .form-select {
+/* ===== Inputs ===== */
+.form-control {
   background: var(--card-bg);
-  color: var(--text);
   border-color: var(--border);
 }
-
-.form-control::placeholder { color: var(--muted); }
 
 /* ===== Botones ===== */
 .btn-primary {
@@ -49,20 +41,13 @@ body { background: var(--bg); color: var(--text); }
   border-color: var(--primary);
 }
 
-.btn-primary:hover { filter: brightness(1.05); }
-
-/* ===== Layout ===== */
+/* ===== Contenedor ===== */
 .container {
   max-width: 1200px;
 }
 
-/* ===== TABLA PROFESIONAL FINAL ===== */
+/* ===== TABLA ESTILO EXCEL ===== */
 
-#resultado .card {
-  width: 100%;
-}
-
-/* ✅ ESTRUCTURA BASE */
 .tabla-resultados {
   width: 100%;
   table-layout: fixed;
@@ -72,30 +57,25 @@ body { background: var(--bg); color: var(--text); }
 
 /* ✅ ENCABEZADO */
 .tabla-resultados thead th {
-  position: sticky;
-  top: 0;
-  background: var(--card-bg);
-  z-index: 1;
-
   text-align: center;
   font-weight: 600;
   padding: 10px;
-
   border-bottom: 2px solid var(--border);
 
-  white-space: nowrap; /* 🔥 evita corte de palabras */
+  /* 🔥 CLAVE: comportamiento tipo Excel */
+  white-space: normal;        /* permite salto */
+  word-break: keep-all;       /* NO rompe palabras */
+  line-height: 1.2;
 }
 
 /* ✅ CELDAS */
 .tabla-resultados td {
   text-align: center;
-  vertical-align: middle;
   padding: 12px;
   border-bottom: 1px solid var(--border);
-  word-break: break-word;
 }
 
-/* ===== ANCHOS PERFECTOS ===== */
+/* ===== ANCHOS EXACTOS ===== */
 
 /* Periodo */
 .tabla-resultados th:nth-child(1),
@@ -110,17 +90,17 @@ body { background: var(--bg); color: var(--text); }
   width: 14%;
 }
 
-/* Días */
+/* Días pendientes */
 .tabla-resultados th:nth-child(3),
 .tabla-resultados td:nth-child(3) {
-  width: 10%;
+  width: 14%;
   font-weight: 600;
 }
 
 /* Vencimiento */
 .tabla-resultados th:nth-child(4),
 .tabla-resultados td:nth-child(4) {
-  width: 28%;
+  width: 26%;
   text-align: left;
   line-height: 1.4;
 }
@@ -128,28 +108,28 @@ body { background: var(--bg); color: var(--text); }
 /* Observación */
 .tabla-resultados th:nth-child(5),
 .tabla-resultados td:nth-child(5) {
-  width: 14%;
+  width: 12%;
 }
 
 /* Sábados */
 .tabla-resultados th:nth-child(6),
 .tabla-resultados td:nth-child(6) {
   width: 11%;
-  font-weight: bold;
   color: var(--primary);
+  font-weight: bold;
 }
 
 /* Domingos */
 .tabla-resultados th:nth-child(7),
 .tabla-resultados td:nth-child(7) {
   width: 11%;
-  font-weight: bold;
   color: var(--primary);
+  font-weight: bold;
 }
 
 /* ===== HOVER ===== */
 .tabla-resultados tbody tr:hover {
-  background: rgba(59, 130, 246, 0.08);
+  background: rgba(59, 130, 246, 0.06);
 }
 
 /* ===== RESPONSIVE ===== */
