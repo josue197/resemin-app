@@ -20,10 +20,7 @@
 }
 
 html, body { height: 100%; }
-body { 
-  background: var(--bg); 
-  color: var(--text); 
-}
+body { background: var(--bg); color: var(--text); }
 
 /* ===== Navbar y Cards ===== */
 .navbar, .card {
@@ -32,29 +29,9 @@ body {
 }
 
 .card {
-  border-width: 1px;
-  border-style: solid;
-  box-shadow: 0 8px 24px rgba(2, 8, 23, 0.15);
+  border: 1px solid var(--border);
   border-radius: 12px;
-}
-
-/* ===== Branding ===== */
-.brand-badge {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  width: 32px; height: 32px;
-  border-radius: 8px;
-  background: var(--primary);
-  color: var(--primary-contrast);
-  font-weight: 700;
-  margin-right: .5rem;
-}
-
-.nav-title {
-  font-weight: 600;
-  color: var(--text);
-  text-decoration: none;
+  box-shadow: 0 8px 24px rgba(2, 8, 23, 0.12);
 }
 
 /* ===== Formularios ===== */
@@ -65,110 +42,107 @@ body {
 }
 
 .form-control::placeholder { color: var(--muted); }
-[data-theme="dark"] .form-control::placeholder { color: #94a3b8; }
-
-input[type="date"] { color-scheme: light dark; }
 
 /* ===== Botones ===== */
 .btn-primary {
   background-color: var(--primary);
   border-color: var(--primary);
-  color: var(--primary-contrast);
 }
 
-.btn-primary:hover { filter: brightness(1.06); }
-
-.btn-outline-primary { 
-  color: var(--primary); 
-  border-color: var(--primary); 
-}
-
-.btn-outline-primary:hover { 
-  background: var(--primary); 
-  color: var(--primary-contrast); 
-}
-
-/* ===== Alertas ===== */
-.alert { 
-  background: var(--card-bg); 
-  color: var(--text); 
-  border-color: var(--border); 
-}
+.btn-primary:hover { filter: brightness(1.05); }
 
 /* ===== Layout ===== */
-.hero { padding: 2rem 0; }
-
 .container {
   max-width: 1200px;
 }
 
-/* ===== TABLA PROFESIONAL ===== */
+/* ===== TABLA PROFESIONAL FINAL ===== */
 
 #resultado .card {
   width: 100%;
 }
 
-/* ✅ FORZAR ESTRUCTURA LIMPIA */
+/* ✅ ESTRUCTURA BASE */
 .tabla-resultados {
   width: 100%;
   table-layout: fixed;
   border-collapse: collapse;
+  font-size: 14px;
 }
 
-/* ===== ENCABEZADO ===== */
+/* ✅ ENCABEZADO */
 .tabla-resultados thead th {
   position: sticky;
   top: 0;
   background: var(--card-bg);
   z-index: 1;
+
   text-align: center;
   font-weight: 600;
   padding: 10px;
+
   border-bottom: 2px solid var(--border);
+
+  white-space: nowrap; /* 🔥 evita corte de palabras */
 }
 
-/* ===== CELDAS ===== */
+/* ✅ CELDAS */
 .tabla-resultados td {
   text-align: center;
   vertical-align: middle;
-  padding: 10px;
+  padding: 12px;
   border-bottom: 1px solid var(--border);
-  word-wrap: break-word;
+  word-break: break-word;
 }
 
-/* ===== AJUSTE POR COLUMNAS ===== */
+/* ===== ANCHOS PERFECTOS ===== */
 
 /* Periodo */
+.tabla-resultados th:nth-child(1),
 .tabla-resultados td:nth-child(1) {
+  width: 12%;
   font-weight: 500;
 }
 
-/* Fecha ingreso */
+/* Ingreso */
+.tabla-resultados th:nth-child(2),
 .tabla-resultados td:nth-child(2) {
-  font-size: 0.9rem;
+  width: 14%;
 }
 
 /* Días */
+.tabla-resultados th:nth-child(3),
 .tabla-resultados td:nth-child(3) {
+  width: 10%;
   font-weight: 600;
 }
 
-/* VENCIMIENTO (más ancho y alineado) */
-.tabla-resultados td:nth-child(4),
-.tabla-resultados th:nth-child(4) {
+/* Vencimiento */
+.tabla-resultados th:nth-child(4),
+.tabla-resultados td:nth-child(4) {
+  width: 28%;
   text-align: left;
-  max-width: 260px;
+  line-height: 1.4;
 }
 
 /* Observación */
-.tabla-resultados td:nth-child(5),
-.tabla-resultados th:nth-child(5) {
-  max-width: 130px;
+.tabla-resultados th:nth-child(5),
+.tabla-resultados td:nth-child(5) {
+  width: 14%;
 }
 
-/* Sábados + Domingos */
-.tabla-resultados td:nth-child(6),
+/* Sábados */
+.tabla-resultados th:nth-child(6),
+.tabla-resultados td:nth-child(6) {
+  width: 11%;
+  font-weight: bold;
+  color: var(--primary);
+}
+
+/* Domingos */
+.tabla-resultados th:nth-child(7),
 .tabla-resultados td:nth-child(7) {
+  width: 11%;
   font-weight: bold;
   color: var(--primary);
 }
@@ -184,11 +158,6 @@ input[type="date"] { color-scheme: light dark; }
 }
 
 @media (max-width: 768px) {
-  .container {
-    padding-left: 12px;
-    padding-right: 12px;
-  }
-
   .tabla-resultados td,
   .tabla-resultados th {
     font-size: 12px;
@@ -207,4 +176,3 @@ input[type="date"] { color-scheme: light dark; }
   margin: 10% auto; 
   max-width: 520px; 
 }
-``
