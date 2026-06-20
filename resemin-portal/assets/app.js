@@ -236,7 +236,7 @@ function renderResultado(data) {
       <div class="card-body">
         <div class="row">
           <div class="col-12 col-md-6">
-  <strong>DNI:</strong> ${persona.DNI ?? '-'} <br>
+  <strong>DNI:</strong> ${persona.TRABAJADOR ?? '-'} <br>
   <strong>Fecha de ingreso:</strong> ${persona.FECHA_INGRESO ?? '-'}
 </div>
 <div class="col-12 col-md-6">
