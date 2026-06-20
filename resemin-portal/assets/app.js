@@ -235,9 +235,14 @@ function renderResultado(data) {
     <div class="card mb-3">
       <div class="card-body">
         <div class="row">
-          <div class="col-12 col-md-6"><strong>DNI:</strong> ${persona.TRABAJADOR ?? '-'}</div>
-          <div class="col-12 col-md-6"><strong>Apellidos y Nombres:</strong> ${persona.APELLIDOS_NOMBRES ?? '-'}</div>
-        </div>
+          <div class="col-12 col-md-6">
+  <strong>DNI:</strong> ${persona.DNI ?? '-'} <br>
+  <strong>Fecha de ingreso:</strong> ${persona.FECHA_INGRESO ?? '-'}
+</div>
+<div class="col-12 col-md-6">
+  <strong>Apellidos y Nombres:</strong><br>
+  ${persona.APELLIDOS_NOMBRES ?? '-'}
+</div>
       </div>
     </div>
   `);
@@ -246,7 +251,6 @@ function renderResultado(data) {
   const tbody = resultados.map(r => `
     <tr>
       <td>${r.PERIODO_VACACIONAL ?? '-'}</td>
-      <td>${r.FECHA_INGRESO ?? '-'}</td>
       <td>${r.DIAS_PENDIENTES ?? '-'}</td>
       <td>${r.VENCIMIENTO ?? '-'}</td>
       <td>${r.OBSERVACION ?? '-'}</td>
@@ -263,7 +267,6 @@ function renderResultado(data) {
             <thead>
               <tr>
                 <th>Periodo</th>
-                <th>Ingreso</th>
                 <th>Días pendientes</th>
                 <th>Vencimiento</th>
                 <th>Observación</th>
